@@ -28,7 +28,7 @@ CELL_DATA = {
 }
 
 class Grid:
-    def __init__(self, cell_size, width=12, height=12, depth=16, chunks=32):
+    def __init__(self, cell_size, width=12, height=12, depth=16, chunks=32, seed=0):
         self.cell_size = cell_size
         self.width = width * cell_size
         self.height = height * cell_size
@@ -36,10 +36,11 @@ class Grid:
         self.chunks = chunks
         self.grid = {}
         self.map_ = {}
+        self.seed = seed
         if os.path.exists('world.json'):
             self.load('world.json')
         else:
-            self.generate_world_heightmap(levels=self.depth)
+            self.generate_world_heightmap(levels=self.depth, seed=self.seed)
             self.init_cell_types()
 
     def generate_world_heightmap(self, scale=8.0, levels=16, seed=0):
