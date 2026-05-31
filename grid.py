@@ -1,8 +1,9 @@
 import pygame
-import moderngl
 import numpy as np
 from bitarray import bitarray
 from noise import pnoise2
+import json
+import os
 
 pygame.init()
 
@@ -16,14 +17,14 @@ CELL_TYPES = {
     'ice': '00111'
 }
 
-CELL_COLORS = {
-    'grass': (0, 255, 0),
-    'dirt': (128, 128, 0),
-    'rock': (128, 128, 128),
-    'water': (0, 0, 255),
-    'lava': (255, 0, 0),
-    'sand': (255, 255, 0),
-    'ice': (0, 255, 255)
+CELL_DATA = {
+    'grass': [(0, 255, 0),    'assets/grass.png'],
+    'dirt':  [(128, 128, 0),  'assets/dirt.png'],
+    'rock':  [(128, 128, 128),'assets/rock.png'],
+    'water': [(0, 0, 255),    'assets/water.png'],
+    'lava':  [(255, 0, 0),    'assets/lava.png'],
+    'sand':  [(255, 255, 0),  'assets/sand.png'],
+    'ice':   [(0, 255, 255),  'assets/ice.png'],
 }
 
 class Grid:
@@ -35,8 +36,11 @@ class Grid:
         self.chunks = chunks
         self.grid = {}
         self.map_ = {}
-        self.generate_world_heightmap(levels=self.depth)
-        self.init_cell_types()
+        if os.path.exists('world.json'):
+            self.load('world.json')
+        else:
+            self.generate_world_heightmap(levels=self.depth)
+            self.init_cell_types()
 
     def generate_world_heightmap(self, scale=8.0, levels=16, seed=0):
         cols = self.chunks // 4
@@ -105,7 +109,7 @@ class Grid:
         cell_type = self.get_cell_type_by_level(self.map_[chunk][y][x])
         self.grid[chunk][y][x][:5] = bitarray(CELL_TYPES[cell_type])
 
-    def build_instances(self, curr_chunk):
+    def build_instances(self, curr_chunk, tile_uvs):
         stride = self.chunks // 4
         tile = self.width // self.cell_size
         visible = self.get_visible_chunks(curr_chunk)
@@ -119,9 +123,23 @@ class Grid:
                 for x in range(tile):
                     g = self.map_[chunk][y][x]
                     cell = self.get_cell_type(x, y, chunk)
-                    color = CELL_COLORS.get(cell, (0, 0, 0))
+                    u_min, u_max = tile_uvs.get(cell, (0, 1))
                     wx = ox + x * self.cell_size
                     wy = oy + y * self.cell_size
-                    instances.append((wx, wy, g, color[0]/255, color[1]/255, color[2]/255))
+                    instances.append((wx, wy, g, u_min, u_max))
         instances.sort(key=lambda t: t[2])
         return np.array(instances, dtype='f4')
+
+    def save(self, path):
+        data = {
+            'map': {str(c): self.map_[c] for c in self.map_},
+            'grid': {str(c): [[self.grid[c][y][x].to01() for x in range(len(self.grid[c][y]))] for y in range(len(self.grid[c]))] for c in self.grid}
+        }
+        with open(path, 'w') as f:
+            json.dump(data, f)
+
+    def load(self, path):
+        with open(path, 'r') as f:
+            data = json.load(f)
+        self.map_ = {int(c): v for c, v in data['map'].items()}
+        self.grid = {int(c): [[bitarray(data['grid'][c][y][x]) for x in range(len(data['grid'][c][y]))] for y in range(len(data['grid'][c]))] for c in data['grid']}

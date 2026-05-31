@@ -1,7 +1,9 @@
 import pygame
 import moderngl
-from grid import Grid
+from grid import Grid, CELL_DATA
 from renderer import Renderer
+import json
+import os
 
 pygame.init()
 pygame.display.gl_set_attribute(pygame.GL_CONTEXT_MAJOR_VERSION, 3)
@@ -24,20 +26,51 @@ clock = pygame.time.Clock()
 
 grid = Grid(CELL_SIZE, GRID_WIDTH, GRID_HEIGHT, GRID_DEPTH, CHUNKS)
 renderer = Renderer(WIDTH, HEIGHT, CELL_SIZE, GRID_DEPTH)
+renderer.build_atlas(CELL_DATA, CELL_SIZE)
+renderer.init_selection()
 
-camera_x = 0
-camera_y = 0
-curr_chunk = 0
-prev_chunk = -1
+def save_player(path, camera_x, camera_y, curr_chunk):
+    with open(path, 'w') as f:
+        json.dump({'camera_x': camera_x, 'camera_y': camera_y, 'curr_chunk': curr_chunk}, f)
+
+def load_player(path):
+    if os.path.exists(path):
+        with open(path, 'r') as f:
+            return json.load(f)
+    return {'camera_x': 0, 'camera_y': 0, 'curr_chunk': 0}
+
+player_data = load_player('player.json')
+camera_x = player_data['camera_x']
+camera_y = player_data['camera_y']
+curr_chunk = player_data['curr_chunk']
+prev_chunk = curr_chunk - 1
 
 running = True
 while running:
     for event in pygame.event.get():
+
+        mx, my = pygame.mouse.get_pos()
+        x = int((mx - camera_x) // CELL_SIZE)
+        y = int((my - camera_y) // CELL_SIZE)
+
         if event.type == pygame.QUIT:
             running = False
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
                 running = False
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            if event.button == 1:
+                chunk_col = x // GRID_WIDTH
+                chunk_row = y // GRID_HEIGHT
+                chunk = chunk_row * (grid.chunks // 4) + chunk_col
+                lx = x % GRID_WIDTH
+                ly = y % GRID_HEIGHT
+                if 0 <= chunk < grid.chunks:
+                    level = grid.get_cell_level(lx, ly, chunk)
+                    grid.set_cell_level(lx, ly, chunk, min(GRID_DEPTH, level + 1))
+                    grid.set_cell_type(lx, ly, chunk)
+                    instance_data = grid.build_instances(curr_chunk, renderer.tile_uvs)
+                    renderer.upload(instance_data)
 
     keys = pygame.key.get_pressed()
     if keys[pygame.K_LEFT] or keys[pygame.K_a]:
@@ -60,12 +93,26 @@ while running:
     curr_chunk = int(chunk_row * stride + chunk_col)
 
     if curr_chunk != prev_chunk:
-        instance_data = grid.build_instances(curr_chunk)
+        instance_data = grid.build_instances(curr_chunk, renderer.tile_uvs)
         renderer.upload(instance_data)
         prev_chunk = curr_chunk
 
     renderer.render(camera_x, camera_y)
+    tx = int((mx - camera_x) // CELL_SIZE)
+    ty = int((my - camera_y) // CELL_SIZE)
+    chunk_col = tx // GRID_WIDTH
+    chunk_row = ty // GRID_HEIGHT
+    chunk = chunk_row * (grid.chunks // 4) + chunk_col
+    lx = tx % GRID_WIDTH
+    ly = ty % GRID_HEIGHT
+    if 0 <= chunk < grid.chunks:
+        g = grid.get_cell_level(lx, ly, chunk)
+        wx = tx * CELL_SIZE + g
+        wy = ty * CELL_SIZE - g
+        renderer.render_selection(wx, wy, camera_x, camera_y)
     pygame.display.flip()
     clock.tick(60)
 
 pygame.quit()
+grid.save('world.json')
+save_player('player.json', camera_x, camera_y, curr_chunk)
