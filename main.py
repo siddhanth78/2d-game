@@ -116,3 +116,4 @@ while running:
 pygame.quit()
 grid.save('world.json')
 save_player('player.json', camera_x, camera_y, curr_chunk)
+exit()
