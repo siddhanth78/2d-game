@@ -68,13 +68,7 @@ class Grid:
             self.grid[c] = [[bitarray('0000000000000000') for _ in range(tile)] for _ in range(tile)]
             for y in range(len(self.map_[c])):
                 for x in range(len(self.map_[c][y])):
-                    level = self.map_[c][y][x]
-                    if level == 0:
-                        self.grid[c][y][x][:5] = bitarray(CELL_TYPES['rock'])
-                    elif 1 <= level <= 5:
-                        self.grid[c][y][x][:5] = bitarray(CELL_TYPES['dirt'])
-                    else:
-                        self.grid[c][y][x][:5] = bitarray(CELL_TYPES['grass'])
+                    self.grid[c][y][x][:5] = bitarray(CELL_TYPES['grass'])
 
     def get_visible_chunks(self, curr_chunk):
         col = curr_chunk % (self.chunks // 4)
