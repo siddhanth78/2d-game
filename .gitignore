@@ -3,3 +3,4 @@ __pycache__/
 *.xcf
 *.md
 *.json
+chunks/

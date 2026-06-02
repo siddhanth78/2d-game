@@ -1,5 +1,4 @@
 import pygame
-import moderngl
 from grid import Grid, CELL_DATA
 from renderer import Renderer
 import json
@@ -29,27 +28,28 @@ renderer = Renderer(WIDTH, HEIGHT, CELL_SIZE, GRID_DEPTH)
 renderer.build_atlas(CELL_DATA, CELL_SIZE)
 renderer.init_selection()
 
-def save_player(path, camera_x, camera_y, curr_chunk):
+def save_player(path, camera_x, camera_y, curr_chunk, equipped):
     with open(path, 'w') as f:
-        json.dump({'camera_x': camera_x, 'camera_y': camera_y, 'curr_chunk': curr_chunk}, f)
+        json.dump({'camera_x': camera_x, 'camera_y': camera_y, 'curr_chunk': curr_chunk, 'equipped': equipped}, f)
 
 def load_player(path):
     if os.path.exists(path):
         with open(path, 'r') as f:
             return json.load(f)
-    return {'camera_x': 0, 'camera_y': 0, 'curr_chunk': 0}
+    return {'camera_x': 0, 'camera_y': 0, 'curr_chunk': 0, 'equipped': 'dirt'}
 
 player_data = load_player('player.json')
 camera_x = player_data['camera_x']
 camera_y = player_data['camera_y']
 curr_chunk = player_data['curr_chunk']
 prev_chunk = curr_chunk - 1
+equipped = player_data['equipped']
 
 running = True
 while running:
-    for event in pygame.event.get():
+    mx, my = pygame.mouse.get_pos()
 
-        mx, my = pygame.mouse.get_pos()
+    for event in pygame.event.get():
         x = int((mx - camera_x) // CELL_SIZE)
         y = int((my - camera_y) // CELL_SIZE)
 
@@ -66,10 +66,18 @@ while running:
                 lx = x % GRID_WIDTH
                 ly = y % GRID_HEIGHT
                 if 0 <= chunk < grid.chunks:
-                    level = grid.get_cell_level(lx, ly, chunk)
-                    grid.set_cell_level(lx, ly, chunk, min(GRID_DEPTH, level + 1))
-                    grid.set_cell_type(lx, ly, chunk)
-                    instance_data = grid.build_instances(curr_chunk, renderer.tile_uvs)
+                    grid.place(lx, ly, chunk, equipped)
+                    instance_data = grid.build_instances(curr_chunk, renderer.tile_uvs, view_z=GRID_DEPTH)
+                    renderer.upload(instance_data)
+            elif event.button == 3:
+                chunk_col = x // GRID_WIDTH
+                chunk_row = y // GRID_HEIGHT
+                chunk = chunk_row * (grid.chunks // 4) + chunk_col
+                lx = x % GRID_WIDTH
+                ly = y % GRID_HEIGHT
+                if 0 <= chunk < grid.chunks:
+                    grid.dig(lx, ly, chunk)
+                    instance_data = grid.build_instances(curr_chunk, renderer.tile_uvs, view_z=GRID_DEPTH)
                     renderer.upload(instance_data)
 
     keys = pygame.key.get_pressed()
@@ -93,7 +101,7 @@ while running:
     curr_chunk = int(chunk_row * stride + chunk_col)
 
     if curr_chunk != prev_chunk:
-        instance_data = grid.build_instances(curr_chunk, renderer.tile_uvs)
+        instance_data = grid.build_instances(curr_chunk, renderer.tile_uvs, view_z=GRID_DEPTH)
         renderer.upload(instance_data)
         prev_chunk = curr_chunk
 
@@ -114,6 +122,6 @@ while running:
     clock.tick(60)
 
 pygame.quit()
-grid.save('world.json')
-save_player('player.json', camera_x, camera_y, curr_chunk)
+grid.save()
+save_player('player.json', camera_x, camera_y, curr_chunk, equipped)
 exit()
